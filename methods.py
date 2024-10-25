@@ -6,6 +6,7 @@ import tqdm
 import networkx as nx
 import pickle as pkl
 import gower
+import math
 import matplotlib.pyplot as plt
 
 def topK(groups, k):
@@ -61,7 +62,7 @@ def ranking(x, S, lu):
     D = list(zip(D.keys(),D.values()))
 
     for d in np.unique(distances):
-
+    
         left, right = distances.index(d), len(distances) - distances[::-1].index(d)
         tielist = D[left:right]
         gowerlist = gower.gower_matrix(pd.DataFrame([getAttributes(x, lu)]), pd.DataFrame([getAttributes(i[0], lu) for i in tielist]))
@@ -85,7 +86,6 @@ def Q(S, G, target):
 
     return abs(WRAcc)
 
-
 def Q2(S, G, target):
     cover = len(S) / len(G)
 
@@ -106,6 +106,9 @@ def Q2(S, G, target):
     
     return WKL
 
+def QTest(S, G, target):
+    return rand.uniform(0,1)
+
 
 
 def Discovery(ranks, G, lu):
@@ -113,19 +116,54 @@ def Discovery(ranks, G, lu):
     sigma = 0
     best = 0
     G_list_target = list(zip(list(G.nodes), [lu.loc[x]['target'] for x in list(G.nodes)]))
+    tempranks = [x for x in ranks[0:4]]
 
     for i in range(5,len(ranks)):
-        q = Q([x for x in ranks[0:i]], G_list_target, 'target')
+        tempranks.append(ranks[i-1])
+        q = Q(tempranks, G_list_target, 'target')
         if q >= best:
+
             best = q
             rho = i
     
     best = 0
-
+    tempranks = [x for x in ranks[0:2]]
     for i in range(3,rho):
-        q = Q([x for x in ranks[0:i]], [x for x in ranks[0:rho]], 'target')
+        tempranks.append(ranks[i-1])
+        q = Q(tempranks, [x for x in ranks[0:rho]], 'target')
         if q >= best:
+
             best = q
             sigma = i
 
     return rho, sigma, best, ranks
+
+
+
+if __name__ == '__main__':
+    with open('graph_349519.pkl', 'rb') as input:
+        graph = pkl.load(input)
+
+    # Extracting data
+    edge_index = graph['edge_index']
+    num_nodes = graph['num_nodes']
+
+    # Create a networkx graph
+    G = nx.Graph()
+
+    # Add nodes
+    G.add_nodes_from(range(num_nodes))
+
+    # Add edges
+    edges = list(zip(edge_index[0], edge_index[1]))
+    G.add_edges_from(edges)
+
+
+    # Create a lookup table for gower distances
+    attributes = graph['node_feat']
+    lu = pd.DataFrame(attributes)
+    lu['target'] = lu[0] >= 6
+
+
+    result = findGroups(G, 20, lu)
+    result.to_csv('no_topk.csv')

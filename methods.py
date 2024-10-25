@@ -36,8 +36,8 @@ def findGroups(G, k, lu):
         out.loc[node] = [rho, sigma, q, ranks] 
 
     out = out.sort_values(by=['q'], ascending= False)
-    out['reference'] = [[] for _ in range(332)]
-    out['subgroup'] = [[] for _ in range(332)]
+    out['reference'] = [[] for _ in range(len(G))]
+    out['subgroup'] = [[] for _ in range(len(G))]
 
     for index, row in out.iterrows():
         out.at[index, 'reference'] = [x[0] for x in row['ranks'][0:row['rho']]]

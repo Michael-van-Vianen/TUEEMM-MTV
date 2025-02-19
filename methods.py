@@ -11,20 +11,23 @@ import matplotlib.pyplot as plt
 
 def topK(groups, k):
     top_k = copy.deepcopy(groups)
-
-    for i in range(k):
+    i = 0
+    while i < len(top_k) and i < k:
         top_group = top_k.iloc[i]
         ref_group = set(top_group['reference'])
         sub_group = set(top_group['subgroup'])
 
+        rows_to_drop = []
         for idx, row in top_k.iloc[i+1:].iterrows():
-            overlap_ref = len(ref_group.intersection(row['reference']))/len(ref_group)
-            overlap_sub = len(sub_group.intersection(row['subgroup']))/len(sub_group)
+            overlap_ref = len(ref_group.intersection(row['reference'])) / len(ref_group)
+            overlap_sub = len(sub_group.intersection(row['subgroup'])) / len(sub_group)
             if overlap_ref > 0.75 and overlap_sub > 0.75:
-                top_k = top_k.drop(idx)
+                rows_to_drop.append(idx)
 
-    top_k = top_k.iloc[0:k]
-    return top_k
+        top_k = top_k.drop(rows_to_drop)
+        i += 1
+
+    return top_k.iloc[:k]
 
 
 def findGroups(G, k, lu, ablation_mode=False):
@@ -51,8 +54,8 @@ def prototype(G):
 
 
 def getAttributes(x, lu):
-    global attributes
-    return [float(i) for i in lu.loc[x].tolist()]
+    numeric_cols = lu.select_dtypes(include=[np.number]).columns
+    return [float(i) for i in lu.loc[x, numeric_cols].tolist()]
 
 
 def ranking(x, S, lu):

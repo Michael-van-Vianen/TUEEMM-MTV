@@ -23,26 +23,25 @@ def topK(groups, k):
             if overlap_ref > 0.75 and overlap_sub > 0.75:
                 top_k = top_k.drop(idx)
 
-    top_k = top_k.iloc[0:20]
+    top_k = top_k.iloc[0:k]
     return top_k
 
 
-def findGroups(G, k, lu):
-    out = pd.DataFrame(columns= ['rho', 'sigma', 'q', 'ranks'])
+def findGroups(G, k, lu, ablation_mode=False):
+    out = pd.DataFrame(columns=['rho', 'sigma', 'q', 'ranks'])
 
     for node in tqdm.tqdm(list(G.nodes)):
-
-        rho, sigma, q, ranks = Discovery(ranking(node, G, lu), G, lu)
+        rho, sigma, q, ranks = Discovery(ranking(node, G, lu), G, lu, ablation_mode=ablation_mode)
         out.loc[node] = [rho, sigma, q, ranks] 
 
-    out = out.sort_values(by=['q'], ascending= False)
+    out = out.sort_values(by=['q'], ascending=False)
     out['reference'] = [[] for _ in range(len(G))]
     out['subgroup'] = [[] for _ in range(len(G))]
 
     for index, row in out.iterrows():
         out.at[index, 'reference'] = [x[0] for x in row['ranks'][0:row['rho']]]
         out.at[index, 'subgroup'] = [x[0] for x in row['ranks'][0:row['sigma']]]
-        
+
     return topK(out, k)
 
 
@@ -110,34 +109,49 @@ def QTest(S, G, target):
     return rand.uniform(0,1)
 
 
-
-def Discovery(ranks, G, lu):
-    rho = 0
-    sigma = 0
-    best = 0
-    G_list_target = list(zip(list(G.nodes), [lu.loc[x]['target'] for x in list(G.nodes)]))
-    tempranks = [x for x in ranks[0:4]]
-
-    for i in range(5,len(ranks)):
-        tempranks.append(ranks[i-1])
-        q = Q(tempranks, G_list_target, 'target')
-        if q >= best:
-
-            best = q
-            rho = i
+def Discovery(ranks, G, lu, ablation_mode=False):
     
-    best = 0
-    tempranks = [x for x in ranks[0:2]]
-    for i in range(3,rho):
-        tempranks.append(ranks[i-1])
-        q = Q(tempranks, [x for x in ranks[0:rho]], 'target')
-        if q >= best:
+    G_list_target = list(zip(list(G.nodes), [lu.loc[x]['target'] for x in list(G.nodes)]))
 
-            best = q
-            sigma = i
+    
+    if not ablation_mode:
+        rho = 0
+        sigma = 0
+        best = 0
 
-    return rho, sigma, best, ranks
+        tempranks = [x for x in ranks[0:4]]
 
+        for i in range(5, len(ranks)):
+            tempranks.append(ranks[i - 1])
+            q = Q(tempranks, G_list_target, 'target')
+            if q >= best:
+                best = q
+                rho = i
+
+        best = 0
+        tempranks = [x for x in ranks[0:2]]
+        for i in range(3, rho):
+            tempranks.append(ranks[i - 1])
+            q = Q(tempranks, [x for x in ranks[0:rho]], 'target')
+            if q >= best:
+                best = q
+                sigma = i
+        return rho, sigma, best, ranks
+
+    else:
+        rho = len(ranks)
+        best = 0
+        sigma = 0
+        
+        tempranks = [x for x in ranks[0:4]]
+        for i in range(5, rho):
+            tempranks.append(ranks[i - 1])
+            q = Q(tempranks, G_list_target, 'target')
+            if q >= best:
+                best = q
+                sigma = i
+
+        return rho, sigma, best, ranks
 
 
 if __name__ == '__main__':

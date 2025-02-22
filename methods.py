@@ -1,18 +1,27 @@
 import copy
 import pandas as pd
 import numpy as np
-import random as rand
 import tqdm
 import networkx as nx
 import pickle as pkl
 import gower
-import math
-import matplotlib.pyplot as plt
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any, List, Tuple
 
 
-def topK(groups, k):
+def top_k_func(groups: pd.DataFrame, k: int) -> pd.DataFrame:
+    """
+    Selects the top k rows from the dataset while removing rows
+    that have high overlap in 'reference' and 'subgroup' columns.
+
+    Args:
+        groups (pd.DataFrame): The DataFrame containing group information.
+        k (int): The number of rows to keep after filtering.
+
+    Returns:
+        pd.DataFrame: The filtered top k rows.
+    """
     top_k = copy.deepcopy(groups)
     i = 0
     while i < len(top_k) and i < k:
@@ -33,90 +42,146 @@ def topK(groups, k):
     return top_k.iloc[:k]
 
 
-def getAttributes(x, lu):
+def get_attributes(x: int, lu: pd.DataFrame) -> List[float]:
+    """
+    Retrieves numeric attribute values from a lookup DataFrame for a single node.
+
+    Args:
+        x (int): The node identifier.
+        lu (pd.DataFrame): The lookup DataFrame with numeric columns.
+
+    Returns:
+        List[float]: A list of numeric values for the node.
+    """
     numeric_cols = lu.select_dtypes(include=[np.number]).columns
     return [float(i) for i in lu.loc[x, numeric_cols].tolist()]
 
 
-def ranking(x, S, lu):
-    D_dict = nx.shortest_path_length(S, x)
-    distances = list(D_dict.values())
-    D = list(zip(D_dict.keys(), D_dict.values()))
+def ranking(x: int, s: nx.Graph, lu: pd.DataFrame) -> List[Tuple[Any, Any]]:
+    """
+    Computes a ranking of other nodes based on shortest path lengths
+    and breaks ties using gower distances.
+
+    Args:
+        x (int): The reference node.
+        s (nx.Graph): The network graph.
+        lu (pd.DataFrame): The lookup DataFrame with attributes.
+
+    Returns:
+        List[Tuple[Any, Any]]: A list of tuples (node, target) in ranked order.
+    """
+    d_dict = nx.shortest_path_length(s, x)
+    distances = list(d_dict.values())
+    D = list(zip(d_dict.keys(), d_dict.values()))
 
     for d in np.unique(distances):
         left = distances.index(d)
         right = len(distances) - distances[::-1].index(d)
-        tielist = D[left:right]
+        tie_list = D[left:right]
 
-        gowerlist = gower.gower_matrix(
-            pd.DataFrame([getAttributes(x, lu)]),
-            pd.DataFrame([getAttributes(t[0], lu) for t in tielist])
+        gower_list = gower.gower_matrix(
+            pd.DataFrame([get_attributes(x, lu)]),
+            pd.DataFrame([get_attributes(t[0], lu) for t in tie_list])
         )
-        sorted_gower = [node for _, node in sorted(zip(gowerlist[0], tielist))]
+        sorted_gower = [node for _, node in sorted(zip(gower_list[0], tie_list))]
         D[left:right] = sorted_gower
     ranks = [(node[0], lu.loc[node[0]]['target']) for node in D]
     return ranks
 
 
-def Q(S, G, target):
-    S_size = len(S)
-    G_size = len(G)
-    if S_size == 0 or G_size == 0:
+def q_func(s: List[Tuple[Any, int]], g: List[Tuple[Any, int]], target: str) -> float:
+    """
+    Computes the WRAcc-based quality measure Q for a given subgroup.
+
+    Args:
+        s (List[Tuple[Any, int]]): The subgroup's (node, target) pairs.
+        g (List[Tuple[Any, int]]): The whole population's (node, target) pairs.
+        target (str): Not used in this function, included for consistency.
+
+    Returns:
+        float: The quality measure Q.
+    """
+    s_size = len(s)
+    g_size = len(g)
+    if s_size == 0 or g_size == 0:
         return 0
 
-    cover = S_size / G_size
-    n_target_S = sum([x[1] for x in S])
-    n_target_G = sum([x[1] for x in G])
+    cover = s_size / g_size
+    n_target_s = sum([x[1] for x in s])
+    n_target_g = sum([x[1] for x in g])
 
-    WRAcc = (cover ** 0.5) * ((n_target_S / S_size) - (n_target_G / G_size))
-    return abs(WRAcc)
+    wr_acc = (cover ** 0.5) * ((n_target_s / s_size) - (n_target_g / g_size))
+    return abs(wr_acc)
 
 
-def Q2(S, G, target):
-    if len(S) == 0 or len(G) == 0:
+def Q2(s: List[Tuple[Any, int]], g: List[Tuple[Any, int]], target: str) -> float:
+    """
+    Computes the weighted KL divergence-based quality measure for a subgroup.
+
+    Args:
+        s (List[Tuple[Any, int]]): The subgroup's (node, target) pairs.
+        g (List[Tuple[Any, int]]): The whole population's (node, target) pairs.
+        target (str): Not used directly, included for consistency.
+
+    Returns:
+        float: The weighted KL divergence measure.
+    """
+    if len(s) == 0 or len(g) == 0:
         return 0
 
-    cover = len(S) / len(G)
-    target_counts_S = sum(x[1] for x in S)
-    target_counts_G = sum(x[1] for x in G)
-    ratio_s = target_counts_S / len(S)
-    ratio_g = target_counts_G / len(G)
+    cover = len(s) / len(g)
+    target_counts_s = sum(x[1] for x in s)
+    target_counts_g = sum(x[1] for x in g)
+    ratio_s = target_counts_s / len(s)
+    ratio_g = target_counts_g / len(g)
 
     arr_s = np.array([ratio_s, 1 - ratio_s])
     arr_g = np.array([ratio_g, 1 - ratio_g])
 
     non_zero_mask = (arr_s > 0)
-    KL_divergence = np.sum(arr_s[non_zero_mask] * np.log(arr_s[non_zero_mask] / arr_g[non_zero_mask]))
+    kl_divergence = np.sum(arr_s[non_zero_mask] * np.log(arr_s[non_zero_mask] / arr_g[non_zero_mask]))
 
-    WKL = cover * KL_divergence
-    return WKL
-
-
-def QTest(S, G, target):
-    return rand.uniform(0, 1)
+    wkl = cover * kl_divergence
+    return wkl
 
 
-def Discovery(ranks, G, lu, ablation_mode=False):
-    G_list_target = list(zip(list(G.nodes), [lu.loc[x]['target'] for x in list(G.nodes)]))
+def discovery(ranks: List[Tuple[Any, Any]],
+              g: nx.Graph,
+              lu: pd.DataFrame,
+              ablation_mode: bool = False) -> Tuple[int, int, float, List[Tuple[Any, Any]]]:
+    """
+    Determines thresholds rho and sigma based on the Q measure.
+
+    Args:
+        ranks (List[Tuple[Any, Any]]): Ranked list of (node, target).
+        g (nx.Graph): The whole graph.
+        lu (pd.DataFrame): Lookup DataFrame.
+        ablation_mode (bool): If True, adjusts the search for sigma.
+
+    Returns:
+        Tuple[int, int, float, List[Tuple[Any, Any]]]:
+            (rho, sigma, best_quality, ranks)
+    """
+    g_list_target = list(zip(list(g.nodes), [lu.loc[x]['target'] for x in list(g.nodes)]))
 
     if not ablation_mode:
         rho = 0
         sigma = 0
         best = 0
 
-        tempranks = [x for x in ranks[0:4]]
+        temp_ranks = [x for x in ranks[0:4]]
         for i in range(5, len(ranks) + 1):
-            tempranks.append(ranks[i - 1])
-            q = Q(tempranks, G_list_target, 'target')
+            temp_ranks.append(ranks[i - 1])
+            q = q_func(temp_ranks, g_list_target, 'target')
             if q >= best:
                 best = q
                 rho = i
 
         best = 0
-        tempranks = [x for x in ranks[0:2]]
+        temp_ranks = [x for x in ranks[0:2]]
         for i in range(3, rho + 1):
-            tempranks.append(ranks[i - 1])
-            q = Q(tempranks, [x for x in ranks[0:rho]], 'target')
+            temp_ranks.append(ranks[i - 1])
+            q = q_func(temp_ranks, [x for x in ranks[0:rho]], 'target')
             if q >= best:
                 best = q
                 sigma = i
@@ -126,32 +191,65 @@ def Discovery(ranks, G, lu, ablation_mode=False):
         rho = len(ranks)
         best = 0
         sigma = 0
-        tempranks = [x for x in ranks[0:4]]
+        temp_ranks = [x for x in ranks[0:4]]
         for i in range(5, rho + 1):
-            tempranks.append(ranks[i - 1])
-            q = Q(tempranks, G_list_target, 'target')
+            temp_ranks.append(ranks[i - 1])
+            q = q_func(temp_ranks, g_list_target, 'target')
             if q >= best:
                 best = q
                 sigma = i
         return rho, sigma, best, ranks
 
 
-def process_node(node, G, lu, ablation_mode=False):
-    ranks = ranking(node, G, lu)
-    rho, sigma, q, ranks = Discovery(ranks, G, lu, ablation_mode=ablation_mode)
-    return (node, rho, sigma, q, ranks)
+def process_node(node: int, 
+                 g: nx.Graph, 
+                 lu: pd.DataFrame, 
+                 ablation_mode: bool = False
+                 ) -> Tuple[int, int, int, float, List[Tuple[Any, Any]]]:
+    """
+    Processes a single node by computing its ranking and subgroup qualities.
+
+    Args:
+        node (int): The node to process.
+        g (nx.Graph): The whole graph.
+        lu (pd.DataFrame): Lookup DataFrame with attributes.
+        ablation_mode (bool): If True, adjusts discovery logic.
+
+    Returns:
+        Tuple[int, int, int, float, List[Tuple[Any, Any]]]:
+            (node, rho, sigma, q, ranks)
+    """
+    ranks = ranking(node, g, lu)
+    rho, sigma, q, ranks = discovery(ranks, g, lu, ablation_mode=ablation_mode)
+    return node, rho, sigma, q, ranks
 
 
-def findGroups(G, k, lu, ablation_mode=False):
+def find_groups(g: nx.Graph,
+                k: int,
+                lu: pd.DataFrame,
+                ablation_mode: bool = False
+                ) -> pd.DataFrame:
+    """
+    Finds subgroups in the graph by processing each node in parallel.
+
+    Args:
+        g (nx.Graph): The whole graph to analyze.
+        k (int): Number of top groups to return.
+        lu (pd.DataFrame): Lookup DataFrame with attributes.
+        ablation_mode (bool): If True, uses ablation variant of discovery.
+
+    Returns:
+        pd.DataFrame: Filtered top k rows with references and subgroups.
+    """
     out_rows = []
 
     with ProcessPoolExecutor() as executor:
         futures = {
-            executor.submit(process_node, node, G, lu, ablation_mode): node
-            for node in G.nodes
+            executor.submit(process_node, node, g, lu, ablation_mode): node
+            for node in g.nodes
         }
 
-        for future in tqdm.tqdm(as_completed(futures), total=len(G.nodes)):
+        for future in tqdm.tqdm(as_completed(futures), total=len(g.nodes)):
             node_result = future.result()
             out_rows.append(node_result)
 
@@ -166,32 +264,25 @@ def findGroups(G, k, lu, ablation_mode=False):
         out.at[index, 'reference'] = [x[0] for x in row['ranks'][0:row['rho']]]
         out.at[index, 'subgroup'] = [x[0] for x in row['ranks'][0:row['sigma']]]
 
-    return topK(out, k)
+    return top_k_func(out, k)
 
 if __name__ == '__main__':
     with open('graph_349519.pkl', 'rb') as input:
         graph = pkl.load(input)
 
-    # Extracting data
     edge_index = graph['edge_index']
     num_nodes = graph['num_nodes']
 
-    # Create a networkx graph
-    G = nx.Graph()
+    whole_graph = nx.Graph()
 
-    # Add nodes
-    G.add_nodes_from(range(num_nodes))
+    whole_graph.add_nodes_from(range(num_nodes))
 
-    # Add edges
     edges = list(zip(edge_index[0], edge_index[1]))
-    G.add_edges_from(edges)
+    whole_graph.add_edges_from(edges)
 
-
-    # Create a lookup table for gower distances
     attributes = graph['node_feat']
-    lu = pd.DataFrame(attributes)
-    lu['target'] = lu[0] >= 6
+    lookup_df = pd.DataFrame(attributes)
+    lookup_df['target'] = lookup_df[0] >= 6
 
-
-    result = findGroups(G, 20, lu)
+    result = find_groups(whole_graph, 20, lookup_df)
     result.to_csv('no_topk.csv')

@@ -85,6 +85,7 @@ def ranking(x: int, s: nx.Graph, lu: pd.DataFrame) -> List[Tuple[Any, Any]]:
         )
         sorted_gower = [node for _, node in sorted(zip(gower_list[0], tie_list))]
         D[left:right] = sorted_gower
+
     ranks = [(node[0], lu.loc[node[0]]['target']) for node in D]
     return ranks
 
@@ -114,41 +115,11 @@ def q_func(s: List[Tuple[Any, int]], g: List[Tuple[Any, int]], target: str) -> f
     return abs(wr_acc)
 
 
-def Q2(s: List[Tuple[Any, int]], g: List[Tuple[Any, int]], target: str) -> float:
-    """
-    Computes the weighted KL divergence-based quality measure for a subgroup.
-
-    Args:
-        s (List[Tuple[Any, int]]): The subgroup's (node, target) pairs.
-        g (List[Tuple[Any, int]]): The whole population's (node, target) pairs.
-        target (str): Not used directly, included for consistency.
-
-    Returns:
-        float: The weighted KL divergence measure.
-    """
-    if len(s) == 0 or len(g) == 0:
-        return 0
-
-    cover = len(s) / len(g)
-    target_counts_s = sum(x[1] for x in s)
-    target_counts_g = sum(x[1] for x in g)
-    ratio_s = target_counts_s / len(s)
-    ratio_g = target_counts_g / len(g)
-
-    arr_s = np.array([ratio_s, 1 - ratio_s])
-    arr_g = np.array([ratio_g, 1 - ratio_g])
-
-    non_zero_mask = (arr_s > 0)
-    kl_divergence = np.sum(arr_s[non_zero_mask] * np.log(arr_s[non_zero_mask] / arr_g[non_zero_mask]))
-
-    wkl = cover * kl_divergence
-    return wkl
-
-
 def discovery(ranks: List[Tuple[Any, Any]],
               g: nx.Graph,
               lu: pd.DataFrame,
-              ablation_mode: bool = False) -> Tuple[int, int, float, List[Tuple[Any, Any]]]:
+              ablation_mode: bool = False
+              ) -> Tuple[int, int, float, List[Tuple[Any, Any]]]:
     """
     Determines thresholds rho and sigma based on the Q measure.
 
@@ -185,6 +156,7 @@ def discovery(ranks: List[Tuple[Any, Any]],
             if q >= best:
                 best = q
                 sigma = i
+
         return rho, sigma, best, ranks
 
     else:
@@ -201,9 +173,9 @@ def discovery(ranks: List[Tuple[Any, Any]],
         return rho, sigma, best, ranks
 
 
-def process_node(node: int, 
-                 g: nx.Graph, 
-                 lu: pd.DataFrame, 
+def process_node(node: int,
+                 g: nx.Graph,
+                 lu: pd.DataFrame,
                  ablation_mode: bool = False
                  ) -> Tuple[int, int, int, float, List[Tuple[Any, Any]]]:
     """
@@ -227,30 +199,38 @@ def process_node(node: int,
 def find_groups(g: nx.Graph,
                 k: int,
                 lu: pd.DataFrame,
-                ablation_mode: bool = False
+                ablation_mode: bool = False,
+                use_multiprocessing: bool = True
                 ) -> pd.DataFrame:
     """
-    Finds subgroups in the graph by processing each node in parallel.
+    Finds subgroups in the graph, either in parallel (multiprocessing) or 
+    single-threaded, based on the 'use_multiprocessing' parameter.
 
     Args:
         g (nx.Graph): The whole graph to analyze.
         k (int): Number of top groups to return.
         lu (pd.DataFrame): Lookup DataFrame with attributes.
         ablation_mode (bool): If True, uses ablation variant of discovery.
+        use_multiprocessing (bool): Whether to enable multiprocessing.
 
     Returns:
         pd.DataFrame: Filtered top k rows with references and subgroups.
     """
     out_rows = []
 
-    with ProcessPoolExecutor() as executor:
-        futures = {
-            executor.submit(process_node, node, g, lu, ablation_mode): node
-            for node in g.nodes
-        }
+    if use_multiprocessing:
+        with ProcessPoolExecutor() as executor:
+            futures = {
+                executor.submit(process_node, node, g, lu, ablation_mode): node
+                for node in g.nodes
+            }
 
-        for future in tqdm.tqdm(as_completed(futures), total=len(g.nodes)):
-            node_result = future.result()
+            for future in tqdm.tqdm(as_completed(futures), total=len(g.nodes)):
+                node_result = future.result()
+                out_rows.append(node_result)
+    else:
+        for node in tqdm.tqdm(g.nodes):
+            node_result = process_node(node, g, lu, ablation_mode)
             out_rows.append(node_result)
 
     out = pd.DataFrame(out_rows, columns=['node', 'rho', 'sigma', 'q', 'ranks']).set_index('node')
@@ -266,23 +246,24 @@ def find_groups(g: nx.Graph,
 
     return top_k_func(out, k)
 
+
 if __name__ == '__main__':
-    with open('graph_349519.pkl', 'rb') as input:
-        graph = pkl.load(input)
+    with open('graph_349519.pkl', 'rb') as input_file:
+        graph = pkl.load(input_file)
 
     edge_index = graph['edge_index']
     num_nodes = graph['num_nodes']
 
-    whole_graph = nx.Graph()
-
-    whole_graph.add_nodes_from(range(num_nodes))
-
+    G = nx.Graph()
+    G.add_nodes_from(range(num_nodes))
     edges = list(zip(edge_index[0], edge_index[1]))
-    whole_graph.add_edges_from(edges)
+    G.add_edges_from(edges)
 
     attributes = graph['node_feat']
     lookup_df = pd.DataFrame(attributes)
     lookup_df['target'] = lookup_df[0] >= 6
 
-    result = find_groups(whole_graph, 20, lookup_df)
+    USE_MULTIPROCESSING = False
+
+    result = find_groups(G, 20, lookup_df, ablation_mode=False, use_multiprocessing=USE_MULTIPROCESSING)
     result.to_csv('no_topk.csv')

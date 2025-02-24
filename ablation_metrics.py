@@ -1,6 +1,22 @@
 import numpy as np
+from numpy import floating
+import pandas as pd
 
-def compare_subgroups(df_normal, df_ablation, k=10):
+from typing import Any, List, Tuple, Dict
+
+
+def compare_subgroups(df_normal: pd.DataFrame, df_ablation: pd.DataFrame, k: int = 10) -> Dict[str, float]:
+    """
+    Compares subgroups between normal and ablation runs.
+
+    Args:
+        df_normal (pd.DataFrame): DataFrame of normal run results.
+        df_ablation (pd.DataFrame): DataFrame of ablation run results.
+        k (int): Number of top rows to compare.
+
+    Returns:
+        Dict[str, float]: Summary metrics such as 'avg_q_normal' and 'avg_subgroup_overlap'.
+    """
     top_normal = df_normal.head(k).reset_index(drop=True)
     top_ablation = df_ablation.head(k).reset_index(drop=True)
 
@@ -15,7 +31,6 @@ def compare_subgroups(df_normal, df_ablation, k=10):
 
     overlap_scores = []
     for i in range(k):
-        # convert from list to set for overlap
         normal_sub = set(top_normal.loc[i, 'subgroup'])
         ablation_sub = set(top_ablation.loc[i, 'subgroup'])
         if len(normal_sub.union(ablation_sub)) > 0:
@@ -36,7 +51,19 @@ def compare_subgroups(df_normal, df_ablation, k=10):
     }
     return summary
 
-def evaluate_pattern_subgroups(df, lu, k=10):
+
+def evaluate_pattern_subgroups(df: pd.DataFrame, lu: pd.DataFrame, k: int = 10) -> tuple[floating[Any], list[float]]:
+    """
+    Evaluates pattern subgroups in a DataFrame.
+
+    Args:
+        df (pd.DataFrame): Ranked results, containing subgroup data.
+        lu (pd.DataFrame): Lookup with 'target' column.
+        k (int): Number of top results to process.
+
+    Returns:
+        Tuple[float, List[float]]: Average target ratio as a float and a list of ratios.
+    """
     top_k = df.head(k)
 
     target_ratios = []

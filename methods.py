@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import tqdm
 import networkx as nx
-import pickle as pkl
 import gower
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -245,25 +244,3 @@ def find_groups(g: nx.Graph,
         out.at[index, 'subgroup'] = [x[0] for x in row['ranks'][0:row['sigma']]]
 
     return top_k_func(out, k)
-
-
-if __name__ == '__main__':
-    with open('graph_349519.pkl', 'rb') as input_file:
-        graph = pkl.load(input_file)
-
-    edge_index = graph['edge_index']
-    num_nodes = graph['num_nodes']
-
-    G = nx.Graph()
-    G.add_nodes_from(range(num_nodes))
-    edges = list(zip(edge_index[0], edge_index[1]))
-    G.add_edges_from(edges)
-
-    attributes = graph['node_feat']
-    lookup_df = pd.DataFrame(attributes)
-    lookup_df['target'] = lookup_df[0] >= 6
-
-    USE_MULTIPROCESSING = False
-
-    result = find_groups(G, 20, lookup_df, ablation_mode=False, use_multiprocessing=USE_MULTIPROCESSING)
-    result.to_csv('no_topk.csv')

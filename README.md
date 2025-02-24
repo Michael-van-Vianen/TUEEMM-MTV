@@ -13,11 +13,11 @@ The code is licensed under MIT. Please see the LICENSE file for more information
 
 ## Datasets
 The code uses the following datasets:
-* OGBG-MolHIV (Primary Dataset)
-* Twitch PT
-* WebKB Cornell
+* [OGBG-MolPCBA (Primary Dataset)](https://ogb.stanford.edu/docs/graphprop/)
+* [Twitch PT](https://arxiv.org/abs/1909.13021) imported from [Torch Geometric Datasets](https://pytorch-geometric.readthedocs.io/en/2.5.3/modules/datasets.html)
+* [WebKB Cornell](https://openreview.net/forum?id=S1e2agrFvS) imported from [Torch Geometric Datasets](https://pytorch-geometric.readthedocs.io/en/2.5.3/modules/datasets.html)
 
 ## Running the Code
 Depending on the dataset, the code has to be run differently.
-* For the OGBG-MolHIV dataset, one first has to run `OGBG-MolHIV_inspecting.ipynb` to inspect the dataset and to generate the `.pkl` file which is needed by `OGBG-MolHIV_dataset.ipynb`. After that, one can run `OGBG-MolHIV_dataset.ipynb` which runs the prposed alogrithm on the dataset and does the ablation study. It also generates a `.csv` file with the results of the algorithm which is needed as input for the `OGBG-MolHIV_visualization.ipynb` file which visualizes the results. Inside each of the files one has to specify the protein number which one wants to inspect, the protein number has to match within all three files.
-* For the Twitch PT and the WebKB Cornell dataset one first has to run the `{dataset name}_dataset.ipynb` file which runs the proposed algorithm on the dataset and does the ablation study. It also generates a `.csv` file with the results of the algorithm which is needed as input for the `{dataset name}_visualization.ipynb` file which visualizes the results which has to be run after the dataset file.
+* For the **OGBG-MolPCBA** dataset, one first has to run `OGBG-MolPCBA_inspecting.ipynb` to inspect the dataset and to generate the `.pkl` file which is needed by `OGBG-MolPCBA_dataset.ipynb`. After that, one can run `OGBG-MolPCBA_dataset.ipynb` which runs the proposed algorithm on the dataset and does the ablation study. It also generates a `.csv` file with the results of the algorithm which is needed as input for the `OGBG-MolPCBA_visualization.ipynb` file which visualizes the results. Inside each of the files one has to specify the protein number which one wants to inspect, the protein number has to match with the files run prior.
+* For the **Twitch-PT** and the **WebKB Cornell** dataset one first has to run the `{dataset name}_dataset.ipynb` file to run the proposed algorithm on the respective dataset.

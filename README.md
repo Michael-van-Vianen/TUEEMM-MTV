@@ -9,7 +9,7 @@ The authors are Carl Vico Heinrich, Tommie Lombarts, Jules Mallens, Luc Tortike,
 * The dependencies are listed in the `requirements.txt` file and can be run with `pip install -r requirements.txt`.
 
 ## License
-The code is licensed under MIT. Please see the LICENSE file for more information.
+The code is licensed under MIT. Please see the `LICENSE.txt` file for more information.
 
 ## Datasets
 The code uses the following datasets:

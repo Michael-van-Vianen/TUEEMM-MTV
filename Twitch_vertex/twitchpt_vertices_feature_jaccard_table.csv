@@ -1,0 +1,7 @@
+Feature,Size,Jaccard Distance
+Partner=1,279,0.8540794979079498
+AgeBand=young,631,0.6699790794979079
+ViewsBand=medium,631,0.6699790794979079
+ExplicitLanguage=1,661,0.6542887029288703
+HighActivity=1,952,0.502092050209205
+

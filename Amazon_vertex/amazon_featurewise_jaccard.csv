@@ -1,0 +1,6 @@
+Feature,Value,Size,Jaccard Distance
+PriceTier,budget,612,0.6778947368421053
+ReviewBand,medium,627,0.6699999999999999
+Featured,1,950,0.5
+Electronics,1,950,0.5
+
